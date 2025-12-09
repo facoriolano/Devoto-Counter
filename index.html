@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Devotio Counter</title>
+    
+    <!-- Error Handler -->
+    <script>
+      window.onerror = function(msg, url, line, col, error) {
+        console.error("Erro detectado:", msg, error);
+      };
+    </script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ['Inter', 'sans-serif'] },
+            colors: {
+              primary: { 50: '#f0f9ff', 100: '#e0f2fe', 500: '#0ea5e9', 600: '#0284c7', 700: '#0369a1' }
+            }
+          }
+        }
+      }
+    </script>
+
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+      body { -webkit-tap-highlight-color: transparent; }
+      
+      @keyframes fadeIn {
+        from { opacity: 0; transform: scale(0.99); }
+        to { opacity: 1; transform: scale(1); }
+      }
+      .animate-fadeIn { animation: fadeIn 0.2s ease-out forwards; }
+
+      /* Lógica do Círculo baseada no seu exemplo do Relógio */
+      .circle-container {
+        position: relative;
+        width: 260px;
+        height: 260px;
+        border-radius: 50%;
+        background-color: #f1f5f9; 
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+      }
+
+      .circle-progress {
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        border-radius: 50%;
+        /* O gradiente será definido via JS */
+        transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+      }
+
+      .circle-inner {
+        position: absolute;
+        top: 16px; left: 16px; right: 16px; bottom: 16px;
+        background-color: white;
+        border-radius: 50%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        z-index: 10;
+      }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.556.0",
+    "react": "https://aistudiocdn.com/react@^19.2.1",
+    "react/": "https://aistudiocdn.com/react@^19.2.1/"
+  }
+}
+</script>
+</head>
+  <body class="bg-slate-50 text-slate-900 font-sans min-h-screen pb-12 select-none">
+    
+    <div id="header-container"></div>
+    
+    <main id="app" class="max-w-md mx-auto px-4 py-6">
+      <!-- Loading -->
+    </main>
+    
+    <!-- Container invisível para compatibilidade -->
+    <div id="root" style="display:none"></div>
+
+    <script>
+      // --- DADOS ---
+      const MODES = {
+          NOVENA: { id: 'NOVENA', title: 'Novena', max: 9, color: 'text-rose-500', desc: 'Sequência de 9 dias.' },
+          QUARESMA: { id: 'QUARESMA', title: 'Quaresma', max: 40, color: 'text-purple-600', desc: '40 dias de oração.' },
+          CONSAGRACAO: { id: 'CONSAGRACAO', title: 'Consagração', color: 'text-blue-600', desc: 'Método São Luís (33 dias).' },
+          LIVRE: { id: 'LIVRE', title: 'Contagem Livre', color: 'text-emerald-600', desc: 'Contador infinito.' }
+      };
+
+      const CONSECRATION_PARTS = [
+          { key: 'part1', label: 'Desapego do Mundo', max: 12, color: 'bg-amber-500' },
+          { key: 'part2', label: 'Conhecimento de Si', max: 7, color: 'bg-teal-500' },
+          { key: 'part3', label: 'Conhecimento de Maria', max: 7, color: 'bg-blue-500' },
+          { key: 'part4', label: 'Conhecimento de Jesus', max: 7, color: 'bg-indigo-500' },
+      ];
+
+      // --- STATE ---
+      const State = {
+          currentMode: null, 
+          activeViewId: null, 
+          
+          get(key, def) {
+              try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; } 
+              catch (e) { return def; }
+          },
+          set(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
+      };
+
+      // --- HELPERS ---
+      function safeIcons() {
+          if (window.lucide) window.lucide.createIcons();
+      }
+
+      // --- ACTIONS ---
+      window.Actions = {
+        simple: {
+          inc: (modeId) => {
+             const config = MODES[modeId];
+             const key = `devotio_${modeId.toLowerCase()}`;
+             let count = State.get(key, 1);
+             if (count < config.max) {
+                 State.set(key, count + 1);
+                 updateSimpleCounterUI(modeId, count + 1);
+             }
+          },
+          dec: (modeId) => {
+             const key = `devotio_${modeId.toLowerCase()}`;
+             let count = State.get(key, 1);
+             if (count > 1) {
+                 State.set(key, count - 1);
+                 updateSimpleCounterUI(modeId, count - 1);
+             }
+          },
+          reset: (modeId) => {
+             console.log("Resetando", modeId);
+             const key = `devotio_${modeId.toLowerCase()}`;
+             State.set(key, 1);
+             updateSimpleCounterUI(modeId, 1);
+          }
+        },
+        free: {
+           update: (delta) => {
+              let count = State.get('devotio_free', 0);
+              if (delta < 0 && count === 0) return;
+              count += delta;
+              if (count < 0) count = 0;
+              State.set('devotio_free', count);
+              const elVal = document.getElementById('free-val');
+              const elBtn = document.getElementById('btn-free-minus');
+              if(elVal) elVal.innerText = count;
+              if(elBtn) elBtn.disabled = count === 0;
+           },
+           reset: () => {
+              State.set('devotio_free', 0);
+              const elVal = document.getElementById('free-val');
+              const elBtn = document.getElementById('btn-free-minus');
+              if(elVal) elVal.innerText = '0';
+              if(elBtn) elBtn.disabled = true;
+           }
+        },
+        cons: {
+            update: (key, delta, max) => {
+                const s = State.get('devotio_consecration', { part1: 0, part2: 0, part3: 0, part4: 0 });
+                if (delta > 0 && s[key] < max) s[key]++;
+                else if (delta < 0 && s[key] > 0) s[key]--;
+                else return;
+                
+                State.set('devotio_consecration', s);
+                updateConsecrationUI(); // AGORA CHAMA O UPDATE LEVE
+            },
+            reset: () => {
+                State.set('devotio_consecration', { part1: 0, part2: 0, part3: 0, part4: 0 });
+                updateConsecrationUI(); // AGORA CHAMA O UPDATE LEVE
+            }
+        }
+      };
+
+      // --- RENDERERS ---
+
+      function renderHeader() {
+          const container = document.getElementById('header-container');
+          const title = State.currentMode ? MODES[State.currentMode].title : "Devotio";
+          const showBack = State.currentMode !== null;
+
+          container.innerHTML = `
+              <header class="sticky top-0 z-10 w-full bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 py-4">
+                  <div class="max-w-md mx-auto flex items-center gap-3">
+                      ${showBack ? `
+                      <button onclick="navigate(null)" class="p-2 -ml-2 rounded-full hover:bg-slate-100 text-slate-600 transition-colors">
+                          <i data-lucide="arrow-left" class="w-6 h-6"></i>
+                      </button>` : ''}
+                      <h1 class="text-xl font-bold text-slate-800 tracking-tight">${title}</h1>
+                  </div>
+              </header>
+          `;
+          safeIcons();
+      }
+
+      function renderMenu() {
+          State.activeViewId = 'MENU';
+          const app = document.getElementById('app');
+          const getIcon = (m) => {
+              if(m === 'NOVENA') return 'calendar-days';
+              if(m === 'QUARESMA') return 'book-open';
+              if(m === 'CONSAGRACAO') return 'scroll-text';
+              return 'infinity';
+          };
+
+          let html = `<div class="grid gap-4 animate-slideIn"><p class="text-slate-500 mb-2 px-1">Selecione o tipo de contagem:</p>`;
+          Object.values(MODES).forEach(mode => {
+              html += `
+              <button onclick="navigate('${mode.id}')" class="group w-full bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:border-primary-300 hover:shadow-md transition-all text-left flex items-start gap-4 active:scale-[0.98]">
+                  <div class="p-3 rounded-xl bg-slate-50 group-hover:bg-white ${mode.color}">
+                      <i data-lucide="${getIcon(mode.id)}" class="w-6 h-6"></i>
+                  </div>
+                  <div class="flex-1">
+                      <h3 class="font-semibold text-slate-800 text-lg group-hover:text-primary-700">${mode.title}</h3>
+                      <p class="text-slate-500 text-sm mt-1">${mode.desc}</p>
+                  </div>
+                  <div class="self-center text-slate-300 group-hover:text-primary-400">
+                      <i data-lucide="chevron-right" class="w-5 h-5"></i>
+                  </div>
+              </button>`;
+          });
+          html += `</div>`;
+          app.innerHTML = html;
+          safeIcons();
+      }
+
+      // --- SIMPLE COUNTER ---
+      function mountSimpleCounter(modeId) {
+          const config = MODES[modeId];
+          const app = document.getElementById('app');
+          
+          app.innerHTML = `
+              <div class="flex flex-col items-center animate-fadeIn">
+                  <div class="w-full bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
+                      <p class="text-slate-500 text-center mb-8">Dia atual da ${config.title}</p>
+                      <div class="circle-container mx-auto mb-8">
+                          <div id="progress-circle" class="circle-progress"></div>
+                          <div class="circle-inner">
+                              <div id="counter-content" class="flex flex-col items-center"></div>
+                          </div>
+                      </div>
+                      <div class="flex items-center justify-center gap-6">
+                          <!-- Botão Menos Atualizado: Rosa, cheio, com sombra -->
+                          <button id="btn-minus" onclick="Actions.simple.dec('${modeId}')" class="w-20 h-20 rounded-full bg-rose-500 hover:bg-rose-600 text-white shadow-lg flex items-center justify-center active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all"><i data-lucide="minus" class="w-8 h-8"></i></button>
+                          <button id="btn-plus" onclick="Actions.simple.inc('${modeId}')" class="w-24 h-24 rounded-full text-white shadow-lg flex items-center justify-center active:scale-95 transition-all bg-primary-600 hover:bg-primary-700"><i data-lucide="plus" class="w-10 h-10"></i></button>
+                      </div>
+                  </div>
+                  <button onclick="Actions.simple.reset('${modeId}')" class="w-full max-w-xs flex items-center justify-center gap-2 text-slate-400 hover:text-red-500 p-4 transition-colors active:scale-95"><i data-lucide="rotate-ccw" class="w-4 h-4"></i> <span>Reiniciar Contagem</span></button>
+                  <div id="msg-complete" class="hidden mt-4 p-4 bg-green-50 text-green-700 rounded-lg text-center border border-green-200 animate-bounce w-full"><p class="font-bold">Parabéns!</p><p>Devoção completa.</p></div>
+              </div>
+          `;
+          
+          const key = `devotio_${modeId.toLowerCase()}`;
+          const initialCount = State.get(key, 1);
+          updateSimpleCounterUI(modeId, initialCount);
+      }
+
+      function updateSimpleCounterUI(modeId, count) {
+          const config = MODES[modeId];
+          const isComplete = count >= config.max;
+          const pct = Math.min(100, (count / config.max) * 100);
+          
+          const circle = document.getElementById('progress-circle');
+          const content = document.getElementById('counter-content');
+          const btnPlus = document.getElementById('btn-plus');
+          const btnMinus = document.getElementById('btn-minus');
+          const msg = document.getElementById('msg-complete');
+
+          if (!circle) return; 
+
+          const color = isComplete ? '#22c55e' : '#0ea5e9'; 
+          circle.style.background = `conic-gradient(${color} ${pct}%, transparent 0%)`;
+
+          if (isComplete) {
+              content.innerHTML = `<i data-lucide="check-circle-2" class="w-20 h-20 text-green-500 mb-2"></i>`;
+              btnPlus.innerHTML = `<i data-lucide="check" class="w-10 h-10"></i>`;
+              btnPlus.className = "w-24 h-24 rounded-full text-white shadow-lg flex items-center justify-center transition-all bg-green-500 cursor-default";
+              btnPlus.disabled = true;
+              msg.classList.remove('hidden');
+          } else {
+              content.innerHTML = `<span class="text-7xl font-bold text-slate-800">${count}</span><span class="text-slate-400 font-medium text-sm mt-1 uppercase tracking-widest">de ${config.max}</span>`;
+              btnPlus.innerHTML = `<i data-lucide="plus" class="w-10 h-10"></i>`;
+              btnPlus.className = "w-24 h-24 rounded-full text-white shadow-lg flex items-center justify-center active:scale-95 transition-all bg-primary-600 hover:bg-primary-700";
+              btnPlus.disabled = false;
+              msg.classList.add('hidden');
+          }
+
+          btnMinus.disabled = count <= 1 || isComplete;
+          safeIcons();
+      }
+
+      // --- FREE COUNTER ---
+      function renderFreeCounter() {
+          State.activeViewId = 'LIVRE';
+          const count = State.get('devotio_free', 0);
+          
+          document.getElementById('app').innerHTML = `
+          <div class="flex flex-col items-center animate-fadeIn">
+            <div class="w-full bg-white rounded-2xl p-8 shadow-sm border border-slate-100 mb-6 flex flex-col items-center">
+              <p class="text-slate-500 mb-8">Contador livre</p>
+              <div class="mb-12 text-center">
+                <div id="free-val" class="text-8xl font-bold text-slate-800 tabular-nums">${count}</div>
+                <div class="text-slate-400 font-medium mt-2">TOTAL</div>
+              </div>
+              <div class="grid grid-cols-2 gap-4 w-full">
+                <!-- Botão Menos Atualizado: Rosa -->
+                <button id="btn-free-minus" onclick="Actions.free.update(-1)" ${count===0?'disabled':''} class="h-20 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-transform"><i data-lucide="minus" class="w-8 h-8"></i></button>
+                <button onclick="Actions.free.update(1)" class="h-20 rounded-2xl bg-primary-600 hover:bg-primary-700 text-white flex items-center justify-center active:scale-95 transition-transform"><i data-lucide="plus" class="w-8 h-8"></i></button>
+              </div>
+            </div>
+            <button onclick="Actions.free.reset()" class="w-full p-4 text-slate-400 hover:text-red-500 flex justify-center items-center gap-2 transition-colors active:scale-95"><i data-lucide="rotate-ccw" class="w-4 h-4"></i> Zerar Contador</button>
+          </div>`;
+          safeIcons();
+      }
+
+      // --- CONSAGRAÇÃO (Lógica corrigida para não piscar) ---
+      
+      // 1. Cria o HTML com IDs (Executa só 1 vez)
+      function mountConsecration() {
+          State.activeViewId = 'CONSAGRACAO';
+          let html = `
+          <div class="animate-fadeIn pb-8">
+              <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm mb-6">
+                  <div class="flex justify-between mb-2"><span class="text-sm text-slate-500">Progresso Total</span><span id="cons-total-text" class="font-bold text-primary-600">0%</span></div>
+                  <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden"><div id="cons-total-bar" class="bg-primary-600 h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div></div>
+              </div>
+              <div class="space-y-4">`;
+
+          CONSECRATION_PARTS.forEach((p, i) => {
+              html += `
+              <div id="cons-card-${p.key}" class="bg-white rounded-xl border border-slate-200 p-5 transition-all duration-300">
+                  <div class="flex justify-between mb-4">
+                      <div><span class="px-2 py-0.5 rounded text-xs font-bold text-white ${p.color}">Parte ${i+1}</span><h3 class="font-semibold text-lg text-slate-800">${p.label}</h3></div>
+                      <div id="cons-header-icon-${p.key}"></div>
+                  </div>
+                  <div class="flex justify-between items-center">
+                      <div class="text-3xl font-bold text-slate-700"><span id="cons-val-${p.key}">0</span> <span class="text-sm text-slate-400 font-normal">/ ${p.max}</span></div>
+                      <div class="flex gap-2">
+                          <!-- Botão Menos Atualizado: Rosa e com ícone -->
+                          <button id="cons-btn-minus-${p.key}" onclick="Actions.cons.update('${p.key}',-1,${p.max})" class="w-10 h-10 rounded-lg bg-rose-500 hover:bg-rose-600 text-white flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all"><i data-lucide="minus" class="w-5"></i></button>
+                          <button id="cons-btn-plus-${p.key}" onclick="Actions.cons.update('${p.key}',1,${p.max})" class="w-10 h-10 rounded-lg text-white flex items-center justify-center active:scale-95 transition-all bg-primary-600 hover:bg-primary-700"><i data-lucide="chevron-right" class="w-5"></i></button>
+                      </div>
+                  </div>
+                  <div class="mt-4 w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                    <div id="cons-bar-${p.key}" class="h-full ${p.color.replace('text-', 'bg-')}" style="width: 0%"></div>
+                  </div>
+              </div>`;
+          });
+
+          html += `</div><button onclick="Actions.cons.reset()" class="w-full mt-8 p-3 text-slate-400 hover:text-red-500 flex justify-center items-center gap-2 transition-colors active:scale-95"><i data-lucide="rotate-ccw" class="w-4"></i> Reiniciar Tudo</button></div>`;
+          
+          document.getElementById('app').innerHTML = html;
+          
+          // Preenche os valores
+          updateConsecrationUI();
+      }
+
+      // 2. Atualiza apenas os valores (Executa a cada clique)
+      function updateConsecrationUI() {
+          const INITIAL = { part1: 0, part2: 0, part3: 0, part4: 0 };
+          const s = State.get('devotio_consecration', INITIAL);
+
+          const total = 33;
+          const cur = s.part1 + s.part2 + s.part3 + s.part4;
+          const pct = Math.round((cur/total)*100);
+
+          // Atualiza Total
+          const totalText = document.getElementById('cons-total-text');
+          const totalBar = document.getElementById('cons-total-bar');
+          if(totalText) totalText.innerText = `${pct}%`;
+          if(totalBar) totalBar.style.width = `${pct}%`;
+
+          // Atualiza Partes
+          CONSECRATION_PARTS.forEach((p) => {
+              const val = s[p.key];
+              const isMax = val === p.max;
+
+              // Texto Valor
+              const elVal = document.getElementById(`cons-val-${p.key}`);
+              if(elVal) elVal.innerText = val;
+
+              // Barra Progresso
+              const elBar = document.getElementById(`cons-bar-${p.key}`);
+              if(elBar) {
+                  elBar.style.width = `${(val / p.max) * 100}%`;
+                  // Se completo, fica verde, senão cor original
+                  elBar.className = `h-full transition-all duration-300 ${isMax ? 'bg-green-500' : p.color.replace('text-', 'bg-')}`;
+              }
+
+              // Botão Menos
+              const btnMinus = document.getElementById(`cons-btn-minus-${p.key}`);
+              if(btnMinus) btnMinus.disabled = val === 0;
+
+              // Botão Mais (Muda aparencia se completo)
+              const btnPlus = document.getElementById(`cons-btn-plus-${p.key}`);
+              if(btnPlus) {
+                  btnPlus.disabled = isMax;
+                  if (isMax) {
+                      btnPlus.className = "w-10 h-10 rounded-lg text-white flex items-center justify-center transition-all bg-green-500 cursor-default";
+                      // Só atualiza HTML se mudar para evitar repintura de ícone desnecessária
+                      if(!btnPlus.querySelector('[data-lucide="check"]')) 
+                          btnPlus.innerHTML = `<i data-lucide="check" class="w-4"></i>`;
+                  } else {
+                      btnPlus.className = "w-10 h-10 rounded-lg text-white flex items-center justify-center active:scale-95 transition-all bg-primary-600 hover:bg-primary-700";
+                      if(!btnPlus.querySelector('[data-lucide="chevron-right"]'))
+                          btnPlus.innerHTML = `<i data-lucide="chevron-right" class="w-5"></i>`;
+                  }
+              }
+
+              // Card Container (Borda verde se completo)
+              const card = document.getElementById(`cons-card-${p.key}`);
+              if(card) {
+                   card.className = `bg-white rounded-xl border p-5 transition-all duration-300 ${isMax ? 'border-green-200 bg-green-50/30' : 'border-slate-200 shadow-sm'}`;
+              }
+
+              // Icone Header
+              const headerIcon = document.getElementById(`cons-header-icon-${p.key}`);
+              if(headerIcon) {
+                  headerIcon.innerHTML = isMax ? `<i data-lucide="check" class="text-green-500"></i>` : '';
+              }
+          });
+          
+          safeIcons();
+      }
+
+      // --- ROUTER ---
+      window.navigate = (modeId) => {
+          State.currentMode = modeId;
+          renderHeader();
+
+          if (State.activeViewId === modeId && modeId !== null) return;
+
+          if (!modeId) {
+              renderMenu();
+          } else if (['NOVENA','QUARESMA'].includes(modeId)) {
+              State.activeViewId = modeId;
+              mountSimpleCounter(modeId);
+          } else if (modeId === 'LIVRE') {
+              renderFreeCounter();
+          } else {
+              mountConsecration(); // Usa a nova função de montar
+          }
+      };
+
+      // --- INIT ---
+      window.onload = () => {
+        navigate(null);
+      };
+    </script>
+  </body>
+</html>
