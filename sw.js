@@ -3,11 +3,10 @@ const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './manifest.json',
+  './icon.png',
   'https://cdn.tailwindcss.com',
   'https://unpkg.com/lucide@latest',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap',
-  'https://img.icons8.com/fluency/192/dove.png',
-  'https://img.icons8.com/fluency/512/dove.png'
+  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap'
 ];
 
 // Instalação: Cache inicial
