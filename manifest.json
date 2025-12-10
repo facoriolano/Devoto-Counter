@@ -1,7 +1,7 @@
 {
   "name": "Devotio Counter",
   "short_name": "Devotio",
-  "start_url": "./index.html",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#f8fafc",
   "theme_color": "#f8fafc",
